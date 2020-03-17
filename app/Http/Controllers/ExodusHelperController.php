@@ -2,6 +2,7 @@
 
 use App\Form;
 use App\KoraFields\FileTypeField;
+use App\KoraFields\HistoricalDateField;
 use App\Record;
 use App\RecordPreset;
 use Carbon\Carbon;
@@ -448,10 +449,10 @@ class ExodusHelperController extends Controller {
 
             while($lf = $listRows->fetch_assoc()) {
                 $val = $lf['value'];
-                if(!in_array($val,$opts)) {
+                if(!in_array(addslashes($val),$opts)) {
                     Log::info("Added list option `".(string)$val."` to field, $flid...");
                     echo "Added list option `".(string)$val."` to field, $flid...\n";
-                    $opts[] = (string)$val;
+                    $opts[] = addslashes((string)$val);
                 }
             }
 
@@ -474,6 +475,7 @@ class ExodusHelperController extends Controller {
         $recordDataToSave = array();
         $filePartNum = 1;
         $currRecordIndex = 1;
+        $histDateModel = new HistoricalDateField();
 
         while($r = $records->fetch_assoc()) {
             //Start by making the record if it doesn't exist yet
@@ -551,6 +553,7 @@ class ExodusHelperController extends Controller {
                             'prefix' => $prefix,
                             'era' => $era
                         ];
+                        $date['sort'] = $histDateModel->getDateSortValue($date['era'], $date['year'], $date['month'], $date['day']);
                         $recordDataToSave[$r['id']][$flid] = json_encode($date);
                         break;
                     case 'Documents':
@@ -674,13 +677,15 @@ class ExodusHelperController extends Controller {
         $recordPresets = $records = $con->query('select * from recordPreset where schemeid='.$ogSid);
         $pc = new RecordPresetController();
         while($rp = $recordPresets->fetch_assoc()) {
-            $record = RecordController::getRecord($oldKidToNewKid[$rp['kid']]);
-            $preset = new RecordPreset();
-            $preset->form_id = $record->form_id;
-            $preset->record_kid = $record->kid;
+            if(isset($oldKidToNewKid[$rp['kid']])) {
+                $record = RecordController::getRecord($oldKidToNewKid[$rp['kid']]);
+                $preset = new RecordPreset();
+                $preset->form_id = $record->form_id;
+                $preset->record_kid = $record->kid;
 
-            $preset->preset = $pc->getRecordArray($record, $rp['name']);
-            $preset->save();
+                $preset->preset = $pc->getRecordArray($record, $rp['name']);
+                $preset->save();
+            }
         }
 
         //End Record stuff//////////////////////////////////////
@@ -710,7 +715,7 @@ class ExodusHelperController extends Controller {
         $filtered = [];
         foreach($opts as $opt) {
             if($opt!='')
-                $filtered[] = $opt;
+                $filtered[] = addslashes($opt);
         }
 
         return $filtered;
