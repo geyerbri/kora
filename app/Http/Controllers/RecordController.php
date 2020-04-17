@@ -729,11 +729,15 @@ class RecordController extends Controller {
         if(!Record::isKIDPattern($kid))
             return null;
 
-        $parts = explode('-',$kid);
-        $recordMod = new Record(array(),$parts[1]);
-        $record = $recordMod->newQuery()->where('kid', '=', $kid)->first();
+        $fid = explode('-',$kid)[1];
+        if(!is_null(Form::where('id',$fid)->first())) {
+            $recordMod = new Record(array(),$fid);
+            $record = $recordMod->newQuery()->where('kid', '=', $kid)->first();
+            if(!is_null($record))
+                return $record;
+        }
 
-        return $record;
+        return null;
     }
 
     /**
@@ -746,11 +750,15 @@ class RecordController extends Controller {
         if(!Record::isLegacyKIDPattern($kid))
             return null;
 
-        $parts = explode('-',$kid);
-        $recordMod = new Record(array(),$parts[1]);
-        $record = $recordMod->newQuery()->where('legacy_kid', '=', $kid)->first();
+        $forms = Form::all();
+        foreach($forms as $form) {
+            $recordMod = new Record(array(),$form->id);
+            $record = $recordMod->newQuery()->where('legacy_kid', '=', $kid)->first();
+            if(!is_null($record))
+                return $record;
+        }
 
-        return $record;
+        return null;
     }
 
     /**
@@ -828,7 +836,7 @@ class RecordController extends Controller {
         $basedir = storage_path('app/files/'.$pid.'/'.$fid);
         $filesize += self::dirCrawl($basedir);
 
-        $filesize = self::fileSizeConvert($filesize);
+        $filesize = fileSizeConvert($filesize);
 
         return $filesize;
     }
@@ -855,48 +863,6 @@ class RecordController extends Controller {
         }
 
         return $filesize;
-    }
-
-    /**
-     * Converts the directory size in bytes to the most readable form.
-     *
-     * @param  int $bytes - Size in bytes
-     * @return string - The readable size value
-     */
-    private static function fileSizeConvert($bytes) {
-        $result = "0 B";
-        $bytes = floatval($bytes);
-        $arBytes = array(
-            0 => array(
-                "UNIT" => "TB",
-                "VALUE" => pow(1024, 4)
-            ),
-            1 => array(
-                "UNIT" => "GB",
-                "VALUE" => pow(1024, 3)
-            ),
-            2 => array(
-                "UNIT" => "MB",
-                "VALUE" => pow(1024, 2)
-            ),
-            3 => array(
-                "UNIT" => "KB",
-                "VALUE" => 1024
-            ),
-            4 => array(
-                "UNIT" => "B",
-                "VALUE" => 1
-            ),
-        );
-
-        foreach($arBytes as $arItem) {
-            if($bytes >= $arItem["VALUE"]) {
-                $result = $bytes / $arItem["VALUE"];
-                $result = strval(round($result, 2))." ".$arItem["UNIT"];
-                break;
-            }
-        }
-        return $result;
     }
 
     /**

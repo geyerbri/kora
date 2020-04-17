@@ -242,6 +242,7 @@ class RestfulController extends Controller {
         foreach($forms as $f) {
             //initialize form
             $form = FormController::getForm($f->form);
+            $layout = $form->layout;
             $recMod = new Record(array(),$form->id);
             if($globalSort)
                 array_push($fidsGlobal, $form->id);
@@ -285,7 +286,7 @@ class RestfulController extends Controller {
             if(is_array($filters['fields'])) {
                 foreach($filters['fields'] as $field) {
                     $flid = fieldMapper($field, $form->project_id, $form->id);
-                    if(!isset($form->layout['fields'][$flid]))
+                    if(!isset($layout['fields'][$flid]))
                         return response()->json(["status"=>false,"error"=>"The following return field is not apart of the requested form: " . $this->cleanseOutput($flid),"warnings"=>$this->minorErrors],500);
                 }
             }
@@ -295,7 +296,7 @@ class RestfulController extends Controller {
                 foreach($filters['sort'] as $rule) {
                     foreach($rule as $field => $direction) {
                         $flid = fieldMapper($field, $form->project_id, $form->id);
-                        if(!isset($form->layout['fields'][$flid]))
+                        if(!isset($layout['fields'][$flid]))
                             return response()->json(["status" => false, "error" => "The following sort field is not apart of the requested form: " . $this->cleanseOutput($flid), "warnings" => $this->minorErrors], 500);
                     }
                 }
@@ -693,6 +694,9 @@ class RestfulController extends Controller {
             $typedField = $form->getFieldModel($field['type']);
 
             $recRequest = $typedField->processImportData($flid, $field, $jsonField, $recRequest);
+
+            if($recRequest instanceof JsonResponse)
+                return $recRequest;
         }
 
         $recRequest['api'] = true;
@@ -762,6 +766,9 @@ class RestfulController extends Controller {
             $typedField = $form->getFieldModel($field['type']);
 
             $recRequest = $typedField->processImportData($flid, $field, $jsonField, $recRequest);
+
+            if($recRequest instanceof JsonResponse)
+                return $recRequest;
         }
 
         $recRequest['api'] = true;
