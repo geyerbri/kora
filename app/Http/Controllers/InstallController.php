@@ -1,6 +1,7 @@
 <?php namespace App\Http\Controllers;
 
 use App\FieldValuePreset;
+use App\Timer;
 use App\User;
 use App\Version;
 use Carbon\Carbon;
@@ -179,7 +180,7 @@ class InstallController extends Controller {
         try {
             echo "Installing kora tables...\n";
             $shellRes = Artisan::call('migrate', array('--force' => true));
-            echo "Kora 3 tables installed!\n";
+            echo "Kora tables installed!\n";
         } catch(\Exception $e) {
             Log::info($e);
             Log::info($shellRes);
@@ -198,6 +199,24 @@ class InstallController extends Controller {
         } catch(\Exception $e) {
             Log::info($e);
             echo "Failed to set version number! Review the logs for more error information.\n";
+            $this->resetInstall($dbc);
+            return false;
+        }
+
+				//Set the global timers for this Kora 3 install
+        try {
+            echo "Setting global timers...\n";
+						foreach(Timer::$globalTimers as $tName) {
+		            $timer = new Timer();
+						    $timer->timestamps = false;
+		            $timer->name = $tName;
+								$timer->interval = Carbon::now();
+		            $timer->save();
+					  }
+            echo "Global timers set!\n";
+        } catch(\Exception $e) {
+            Log::info($e);
+            echo "Failed to set global timers! Review the logs for more error information.\n";
             $this->resetInstall($dbc);
             return false;
         }
@@ -342,8 +361,8 @@ class InstallController extends Controller {
             return redirect("/");
 
         $configs = array(
-            ['title'=>'Recaptcha Private Key', 'slug'=>'recaptcha_private',    'value'=>config('auth.recap_private')],
             ['title'=>'Recaptcha Public Key',  'slug'=>'recaptcha_public',     'value'=>config('auth.recap_public')],
+            ['title'=>'Recaptcha Private Key', 'slug'=>'recaptcha_private',    'value'=>config('auth.recap_private')],
             ['title'=>'Gitlab Client',         'slug'=>'gitlab_client',        'value'=>config('services.gitlab.client')],
             ['title'=>'Gitlab Client ID',      'slug'=>'gitlab_client_id',     'value'=>config('services.gitlab.client_id')],
             ['title'=>'Gitlab Client Secret',  'slug'=>'gitlab_client_secret', 'value'=>config('services.gitlab.client_secret')],
