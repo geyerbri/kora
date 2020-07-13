@@ -89,8 +89,9 @@ class ProjectSearchController extends Controller {
             //INITIAL PAGE VISIT
             $records = [];
             $total = 0;
-            $ignored = [];
             $initial = true;
+            $page = 1;
+            $pageCount = 10;
         }
 
         $project = ProjectController::getProject($pid);
@@ -100,7 +101,7 @@ class ProjectSearchController extends Controller {
             $forms[$f->id] = $f->name;
         }
 
-        return view('projectSearch.results', compact("project", "forms", "records", "total", "ignored", "initial", "page", "pageCount"));
+        return view('projectSearch.results', compact("project", "forms", "records", "total", "initial", "page", "pageCount"));
     }
 
     private function imitateMerge(&$array1, &$array2) {
@@ -171,7 +172,8 @@ class ProjectSearchController extends Controller {
             //INITIAL PAGE VISIT
             $records = [];
             $total = 0;
-            $ignored = [];
+            $page = 1;
+            $pageCount = 10;
         }
 
         $projects = array("ALL" => 'All Projects');
@@ -217,7 +219,7 @@ class ProjectSearchController extends Controller {
         }
 
         return view('globalSearch.results', compact(
-            "projects", "records", "total", "ignored",
+            "projects", "records", "total",
             'projectArray', 'formArray', 'fieldArray', "page", "pageCount"
         ));
     }
@@ -240,6 +242,7 @@ class ProjectSearchController extends Controller {
         $formResults = Form::where("name","like",$termWC)->get();
         $fieldResults = Form::whereRaw("layout->\"$.fields.*.name\" like \"$termWC\"")->get();
         $recordResult = RecordController::getRecord($term);
+        $legacyRecordResult = RecordController::getRecordByLegacy($term);
 
         $returnArray = array();
 
@@ -287,6 +290,16 @@ class ProjectSearchController extends Controller {
                 $result = "<li>Go to Record: <a data-type=\"Record\" href=\"" .
                     action("RecordController@show", ["pid" => $recordResult->project_id, "fid" => $recordResult->form_id, "rid" => $recordResult->id])
                     . "\">" . $recordResult->kid . "</a></li>";
+                array_push($returnArray, $result);
+            }
+        }
+
+        if(!is_null($legacyRecordResult)) {
+            $form = FormController::getForm($legacyRecordResult->form_id);
+            if (\Auth::user()->admin || \Auth::user()->inAFormGroup($form)) {
+                $result = "<li>Go to Record: <a data-type=\"Record\" href=\"" .
+                    action("RecordController@show", ["pid" => $legacyRecordResult->project_id, "fid" => $legacyRecordResult->form_id, "rid" => $legacyRecordResult->id])
+                    . "\">" . $legacyRecordResult->kid . " (".$legacyRecordResult->legacy_kid.")</a></li>";
                 array_push($returnArray, $result);
             }
         }

@@ -51,18 +51,45 @@ function getDashboardBlockLink($block, $link_type) {
 }
 
 /**
- * Returns formatted string of bytes to the best readable size
+ * Converts the directory size in bytes to the most readable form.
  *
- * @return string - formatted bytes
+ * @param  int $bytes - Size in bytes
+ * @return string - The readable size value
  */
-function formatBytes($bytes) {
-    $units = ['b', 'kb', 'mb', 'gb', 'tb'];
+function fileSizeConvert($bytes) {
+    $result = "0 B";
+    $bytes = floatval($bytes);
+    $arBytes = array(
+        0 => array(
+            "UNIT" => "TB",
+            "VALUE" => pow(1024, 4)
+        ),
+        1 => array(
+            "UNIT" => "GB",
+            "VALUE" => pow(1024, 3)
+        ),
+        2 => array(
+            "UNIT" => "MB",
+            "VALUE" => pow(1024, 2)
+        ),
+        3 => array(
+            "UNIT" => "KB",
+            "VALUE" => 1024
+        ),
+        4 => array(
+            "UNIT" => "B",
+            "VALUE" => 1
+        ),
+    );
 
-    for($i = 0; $bytes > 1024; $i++) {
-        $bytes /= 1024;
+    foreach($arBytes as $arItem) {
+        if($bytes >= $arItem["VALUE"]) {
+            $result = $bytes / $arItem["VALUE"];
+            $result = strval(round($result, 2))." ".$arItem["UNIT"];
+            break;
+        }
     }
-
-    return round($bytes, 1) . ' ' . $units[$i];
+    return $result;
 }
 
 /**
@@ -84,6 +111,44 @@ function fieldMapper($name, $pid, $fid) {
  */
 function slugFormat($name, $project_id, $form_id) {
   return str_replace(" ","_", $name) . '_' . $project_id . '_' . $form_id . '_';
+}
+
+/**
+ * Updates a global timer.
+ *
+ * @param  string $name - Name of timer to update
+ */
+function updateGlobalTimer($name) {
+    $timer = \App\Timer::where('name','=',$name)->first();
+    $timer->timestamps = false;
+    $timer->interval = \Carbon\Carbon::now();
+    $timer->save();
+}
+
+/**
+ * Checks if we should remind an admin to update the reverse cache table.
+ * If it has been 7 days since cache was built, and last record update after last cache update
+ *
+ * @return string - The FLID
+ */
+function checkAssocCacheState() {
+    $user = Auth::user();
+    if(is_null($user) || !$user->admin)
+        return false;
+
+    $cacheTimer = \App\Timer::where('name','=','reverse_assoc_cache_build')->first();
+    $cache = \Carbon\Carbon::parse($cacheTimer->interval);
+    $recordTimer = \App\Timer::where('name','=','last_record_updated')->first();
+    $record = \Carbon\Carbon::parse($recordTimer->interval);
+    $now = \Carbon\Carbon::now();
+
+    $daysSinceCache = $cache->diffInDays($now,false);
+    $recordsUpdatedSinceCache = $cache->diffInDays($record,false);
+
+    if($daysSinceCache >= 7 && $recordsUpdatedSinceCache > 0)
+        return true;
+
+    return false;
 }
 
 /**
@@ -336,7 +401,7 @@ function parseCSV($record) {
               foreach($pairs as $pair)
                   if(array_key_exists($id, $pair))
                       $value = $pair[$id];
-              $record[$field] = $value;
+              $record[trim($field)] = $value;
           }
           array_push($records, $record);
       }

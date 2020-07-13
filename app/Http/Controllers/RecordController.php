@@ -257,6 +257,8 @@ class RecordController extends Controller {
             }
         }
 
+        updateGlobalTimer("last_record_updated");
+
         if($request->api)
             return response()->json(["status"=>true,"message"=>"record_created","kid"=>$record->kid, "kidConnection"=>$connection],200);
         else if($request->mass_creation_num > 0)
@@ -500,6 +502,8 @@ class RecordController extends Controller {
             RecordPresetController::updateIfExists($record);
         }
 
+        updateGlobalTimer("last_record_updated");
+
         if(!$request->api)
             return redirect('projects/' . $pid . '/forms/' . $fid . '/records/' . $rid)->with('k3_global_success', 'record_updated');
         else
@@ -586,7 +590,9 @@ class RecordController extends Controller {
 
         $record->delete();
 
-		return redirect('projects/' . $pid . '/forms/' . $fid . '/records')->with('k3_global_success', 'record_deleted');
+        updateGlobalTimer("last_record_updated");
+
+		    return redirect('projects/' . $pid . '/forms/' . $fid . '/records')->with('k3_global_success', 'record_deleted');
     }
 
     /**
@@ -613,6 +619,8 @@ class RecordController extends Controller {
             $record->delete();
         }
 
+        updateGlobalTimer("last_record_updated");
+
         return redirect('projects/' . $pid . '/forms/' . $fid . '/records')->with('k3_global_success', 'multiple_records_deleted');
     }
 
@@ -637,6 +645,8 @@ class RecordController extends Controller {
 
             return redirect()->action('FormController@show', ['pid' => $pid, 'fid' => $fid])->with('k3_global_success', 'all_record_deleted');
         }
+
+        updateGlobalTimer("last_record_updated");
     }
 
     /**
@@ -729,11 +739,36 @@ class RecordController extends Controller {
         if(!Record::isKIDPattern($kid))
             return null;
 
-        $parts = explode('-',$kid);
-        $recordMod = new Record(array(),$parts[1]);
-        $record = $recordMod->newQuery()->where('kid', '=', $kid)->first();
+        $fid = explode('-',$kid)[1];
+        if(!is_null(Form::where('id',$fid)->first())) {
+            $recordMod = new Record(array(),$fid);
+            $record = $recordMod->newQuery()->where('kid', '=', $kid)->first();
+            if(!is_null($record))
+                return $record;
+        }
 
-        return $record;
+        return null;
+    }
+
+    /**
+     * Get a record back by its kora 2 KID.
+     *
+     * @param  int $kid - Record kora ID
+     * @return Record - Requested record
+     */
+    public static function getRecordByLegacy($kid) {
+        if(!Record::isLegacyKIDPattern($kid))
+            return null;
+
+        $forms = Form::all();
+        foreach($forms as $form) {
+            $recordMod = new Record(array(),$form->id);
+            $record = $recordMod->newQuery()->where('legacy_kid', '=', $kid)->first();
+            if(!is_null($record))
+                return $record;
+        }
+
+        return null;
     }
 
     /**
@@ -811,7 +846,7 @@ class RecordController extends Controller {
         $basedir = storage_path('app/files/'.$pid.'/'.$fid);
         $filesize += self::dirCrawl($basedir);
 
-        $filesize = self::fileSizeConvert($filesize);
+        $filesize = fileSizeConvert($filesize);
 
         return $filesize;
     }
@@ -838,48 +873,6 @@ class RecordController extends Controller {
         }
 
         return $filesize;
-    }
-
-    /**
-     * Converts the directory size in bytes to the most readable form.
-     *
-     * @param  int $bytes - Size in bytes
-     * @return string - The readable size value
-     */
-    private static function fileSizeConvert($bytes) {
-        $result = "0 B";
-        $bytes = floatval($bytes);
-        $arBytes = array(
-            0 => array(
-                "UNIT" => "TB",
-                "VALUE" => pow(1024, 4)
-            ),
-            1 => array(
-                "UNIT" => "GB",
-                "VALUE" => pow(1024, 3)
-            ),
-            2 => array(
-                "UNIT" => "MB",
-                "VALUE" => pow(1024, 2)
-            ),
-            3 => array(
-                "UNIT" => "KB",
-                "VALUE" => 1024
-            ),
-            4 => array(
-                "UNIT" => "B",
-                "VALUE" => 1
-            ),
-        );
-
-        foreach($arBytes as $arItem) {
-            if($bytes >= $arItem["VALUE"]) {
-                $result = $bytes / $arItem["VALUE"];
-                $result = strval(round($result, 2))." ".$arItem["UNIT"];
-                break;
-            }
-        }
-        return $result;
     }
 
     /**
@@ -963,6 +956,8 @@ class RecordController extends Controller {
         $typedField = $form->getFieldModel($field['type']);
         $formFieldValue = $request->{$flid};
 
+        updateGlobalTimer("last_record_updated");
+
         //A field may not be required for a record but we want to force validation here so we use forceReq
         $message = $typedField->validateField($flid, $field, $request, true);
         if(empty($message)) {
@@ -1021,6 +1016,9 @@ class RecordController extends Controller {
             $kids = explode(',', $request->rids);
         else
             $kids = array();
+
+        updateGlobalTimer("last_record_updated");
+        
         //A field may not be required for a record but we want to force validation here so we use forceReq
         $message = $typedField->validateField($flid, $field, $request, true);
         if(empty($message)) {

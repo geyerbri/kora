@@ -1,7 +1,9 @@
 <?php namespace App\Console\Commands;
 
+use App\Http\Controllers\ExportController;
 use App\Http\Controllers\FormController;
 use Illuminate\Console\Command;
+use Illuminate\Http\Request;
 
 class RecordFileZipExport extends Command {
 
@@ -46,44 +48,29 @@ class RecordFileZipExport extends Command {
     public function handle()
     {
         $fid = $this->argument('fid');
-
         $form = FormController::getForm($fid);
+        $filename = $form->internal_name.uniqid().'.zip';
+        $exCtrl = new ExportController();
 
-        $path = storage_path('app/files/'.$form->project_id.'/'.$form->id);
-        $zipPath = storage_path('app/tmpFiles/'.$form->name.'_record_file_export.zip');
+        $prep = $exCtrl->evaluateFormRecordsForExport($form,"ALL",$filename);
+        $prep = $prep->original;
 
-        // Initialize archive object
-        $zip = new \ZipArchive();
-        $zip->open($zipPath, (\ZipArchive::CREATE | \ZipArchive::OVERWRITE));
+        if($prep['message']=='no_record_files')
+            $this->error('No record files found in form: '.$form->name);
+        else {
+            $this->info("Generating zip file...");
 
-        if(file_exists($path)) {
-            ini_set('max_execution_time',0);
+            $request = new Request();
+            $request['file_name'] = $filename;
+            $request['file_array'] = $prep['file_array'];
+            $exCtrl->buildFormRecordZip($form->project_id, $fid, $request);
+            $expectedPath = storage_path('app/tmpFiles/').$filename;
 
-            //add files
-            $files = new \RecursiveIteratorIterator(
-                new \RecursiveDirectoryIterator($path),
-                \RecursiveIteratorIterator::LEAVES_ONLY
-            );
-
-            foreach ($files as $name => $file) {
-                // Skip directories (they would be added automatically)
-                if (!$file->isDir()) {
-                    // Get real and relative path for current file
-                    $filePath = $file->getRealPath();
-                    $relativePath = substr($filePath, strlen($path) + 1);
-
-                    // Add current file to archive
-                    $zip->addFile($filePath, $relativePath);
-                }
+            if(file_exists($expectedPath)) {
+                $this->info("Zip file generated. You may retreive it at $expectedPath");
+            } else {
+                $this->error("Trouble finding generated zip file.");
             }
-        } else {
-            $this->info("No record files in form: $form->name");
-            return '';
         }
-
-        // Zip archive will be created only after closing object
-        $zip->close();
-
-        $this->info("Success! File located at storage/app/tmpFiles/".$form->name."_record_file_export.zip");
     }
 }

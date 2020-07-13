@@ -451,6 +451,7 @@ class Form extends Model {
             }
         }
         $prefix = config('database.connections.mysql.prefix');
+        $layout = $this->layout;
 
         //Some prep to make assoc searching faster
         if($filters['assoc']) {
@@ -462,13 +463,14 @@ class Form extends Model {
             while($row = $theForms->fetch_assoc()) {
                 //Get the form
                 $aFormMod = FormController::getForm($row['id']);
+                $aLayout = $aFormMod->layout;
 
                 //Get the requested fields, but only the ones that are for this particular form
                 $allowedAssocFields = [];
                 if($filters['assocFlids']!="ALL") {
                     foreach ($filters['assocFlids'] as $fieldName) {
                         $flid = fieldMapper($fieldName, $aFormMod->project_id, $aFormMod->id);
-                        if(isset($aFormMod->layout['fields'][$flid]))
+                        if(isset($aLayout['fields'][$flid]))
                             $allowedAssocFields[] = $fieldName;
                     }
                 } else {
@@ -513,7 +515,7 @@ class Form extends Model {
             if(!is_array($filters['fields']) && $filters['fields'] == 'ALL') {
                 //Builds out order of fields based on page
                 $flids = array();
-                foreach ($this->layout['pages'] as $page) {
+                foreach ($layout['pages'] as $page) {
                     $flids = array_merge($flids, $page['flids']);
                 }
             } else {
@@ -534,20 +536,20 @@ class Form extends Model {
                     $name = $flid . ' as `' . $tmp . '`';
                 } else {
                     //Other wise, we are going to use either the field names, or alternative names if requested
-                    if (array_key_exists('altNames', $filters) && $filters['altNames'] && $this->layout['fields'][$flid]['alt_name'] != '')
-                        $tmp = $this->layout['fields'][$flid]['alt_name'];
+                    if (array_key_exists('altNames', $filters) && $filters['altNames'] && $layout['fields'][$flid]['alt_name'] != '')
+                        $tmp = $layout['fields'][$flid]['alt_name'];
                     else
-                        $tmp = $this->layout['fields'][$flid]['name'];
+                        $tmp = $layout['fields'][$flid]['name'];
                     $name = $flid . ' as `' . $tmp . '`';
                 }
 
                 //We want to track which fields are json, associator, or combo so we can handle these later.
                 // Stored as array_keys because the lookup is faster than in_array
-                if(in_array($this->layout['fields'][$flid]['type'], self::$jsonFields))
+                if(in_array($layout['fields'][$flid]['type'], self::$jsonFields))
                     $jsonFields[$tmp] = 1;
-                if($this->layout['fields'][$flid]['type'] == self::_ASSOCIATOR)
+                if($layout['fields'][$flid]['type'] == self::_ASSOCIATOR)
                     $assocFields[$tmp] = 1;
-                if($this->layout['fields'][$flid]['type'] == self::_COMBO_LIST) {
+                if($layout['fields'][$flid]['type'] == self::_COMBO_LIST) {
                     $comboFields[$tmp] = 1;
                     $comboInfo[$tmp]['flid'] = $flid; //We need this in case alternative names are used
 
@@ -557,8 +559,8 @@ class Form extends Model {
                     $comboInfo[$tmp]['assocFields'] = [];
 
                     foreach (['one', 'two'] as $seq) {
-                        $cType = $this->layout['fields'][$flid][$seq]['type'];
-                        $cName = $this->layout['fields'][$flid][$seq]['name'];
+                        $cType = $layout['fields'][$flid][$seq]['type'];
+                        $cName = $layout['fields'][$flid][$seq]['name'];
 
                         if($cType == self::_ASSOCIATOR)
                             $comboInfo[$tmp]['assocFields'][$cName] = 1;
@@ -566,7 +568,7 @@ class Form extends Model {
                             $comboInfo[$tmp]['jsonFields'][$cName] = 1;
 
                         //Create its mysql select call
-                        array_push($subFields, $this->layout['fields'][$flid][$seq]['flid']." as `$cName`");
+                        array_push($subFields, $layout['fields'][$flid][$seq]['flid']." as `$cName`");
                     }
 
                     //Build the full select call
@@ -604,7 +606,10 @@ class Form extends Model {
                         $field = fieldMapper($flid,$this->project_id,$this->id);
                     //Used to protect SQL
                     $field = preg_replace("/[^A-Za-z0-9_]/", '', $field);
-                    $orderBy .= "$field IS NULL, $field $order,";
+                    if(isset($layout['fields'][$field]) && $layout['fields'][$field]['type'] == Form::_HISTORICAL_DATE)
+                        $orderBy .= "$field IS NULL, $field->\"$.sort\" $order,";
+                    else
+                        $orderBy .= "$field IS NULL, $field $order,";
                 }
             }
             $orderBy = substr($orderBy, 0, -1); //Trim the last comma
@@ -761,6 +766,7 @@ class Form extends Model {
             config('database.connections.mysql.database')
         );
         $prefix = config('database.connections.mysql.prefix');
+        $layout = $this->layout;
 
         //We want to make sure we are doing things in utf8 for special characters
         if(!mysqli_set_charset($con, "utf8")) {
@@ -860,7 +866,7 @@ class Form extends Model {
         if(!is_array($filters['fields']) && $filters['fields'] == 'ALL') {
             //Builds out order of fields based on page
             $flids = array();
-            foreach($this->layout['pages'] as $page) {
+            foreach($layout['pages'] as $page) {
                 $flids = array_merge($flids, $page['flids']);
             }
         } else {
@@ -893,15 +899,15 @@ class Form extends Model {
                     $tmp = $mergeMappings[$flid];
                     $name = $flid . ' as `' . $tmp . '`';
                 } else {
-                    $tmp = $this->layout['fields'][$flid]['name'];
+                    $tmp = $layout['fields'][$flid]['name'];
                     $name = $flid . ' as `' . $tmp . '`';
                 }
                 //We do this in realnames because the flid gets us the type to check if its JSON, but it will be compared against the DB result which will have real names instead of flid
-                if(in_array($this->layout['fields'][$flid]['type'], self::$jsonFields))
+                if(in_array($layout['fields'][$flid]['type'], self::$jsonFields))
                     $jsonFields[$tmp] = 1;
-                if($this->layout['fields'][$flid]['type'] == self::_ASSOCIATOR)
+                if($layout['fields'][$flid]['type'] == self::_ASSOCIATOR)
                     $assocFields[$tmp] = 1;
-                if($this->layout['fields'][$flid]['type'] == self::_COMBO_LIST) {
+                if($layout['fields'][$flid]['type'] == self::_COMBO_LIST) {
                     $comboFields[$tmp] = 1;
                     $comboInfo[$tmp]['flid'] = $flid; //We need this in case alternative names are used
 
@@ -911,8 +917,8 @@ class Form extends Model {
                     $comboInfo[$tmp]['assocFields'] = [];
 
                     foreach (['one', 'two'] as $seq) {
-                        $cType = $this->layout['fields'][$flid][$seq]['type'];
-                        $cName = $this->layout['fields'][$flid][$seq]['name'];
+                        $cType = $layout['fields'][$flid][$seq]['type'];
+                        $cName = $layout['fields'][$flid][$seq]['name'];
 
                         if($cType == self::_ASSOCIATOR)
                             $comboInfo[$tmp]['assocFields'][$cName] = 1;
@@ -920,7 +926,7 @@ class Form extends Model {
                             $comboInfo[$tmp]['jsonFields'][$cName] = 1;
 
                         //Create its mysql select call
-                        array_push($subFields, $this->layout['fields'][$flid][$seq]['flid']." as `$cName`");
+                        array_push($subFields, $layout['fields'][$flid][$seq]['flid']." as `$cName`");
                     }
 
                     //Build the full select call
@@ -942,11 +948,11 @@ class Form extends Model {
                     $tmp = $flid;
                     $name = $tmp;
                 }
-                if(in_array($this->layout['fields'][$flid]['type'], self::$jsonFields))
+                if(in_array($layout['fields'][$flid]['type'], self::$jsonFields))
                     $jsonFields[$tmp] = 1;
-                if($this->layout['fields'][$flid]['type'] == self::_ASSOCIATOR)
+                if($layout['fields'][$flid]['type'] == self::_ASSOCIATOR)
                     $assocFields[$tmp] = 1;
-                if($this->layout['fields'][$flid]['type'] == self::_COMBO_LIST) {
+                if($layout['fields'][$flid]['type'] == self::_COMBO_LIST) {
                     $comboFields[$tmp] = 1;
                     $comboInfo[$tmp]['flid'] = $flid; //We need this in case alternative names are used
 
@@ -956,8 +962,8 @@ class Form extends Model {
                     $comboInfo[$tmp]['assocFields'] = [];
 
                     foreach (['one', 'two'] as $seq) {
-                        $cType = $this->layout['fields'][$flid][$seq]['type'];
-                        $cName = $this->layout['fields'][$flid][$seq]['name'];
+                        $cType = $layout['fields'][$flid][$seq]['type'];
+                        $cName = $layout['fields'][$flid][$seq]['name'];
 
                         if($cType == self::_ASSOCIATOR)
                             $comboInfo[$tmp]['assocFields'][$cName] = 1;
@@ -965,7 +971,7 @@ class Form extends Model {
                             $comboInfo[$tmp]['jsonFields'][$cName] = 1;
 
                         //Create its mysql select call
-                        array_push($subFields, $this->layout['fields'][$flid][$seq]['flid']." as `$cName`");
+                        array_push($subFields, $layout['fields'][$flid][$seq]['flid']." as `$cName`");
                     }
 
                     //Build the full select call
@@ -1000,7 +1006,10 @@ class Form extends Model {
                     //Used to protect SQL
                     $field = RestfulBetaController::removeIllegalFieldCharacters($flid);
                     $field = preg_replace("/[^A-Za-z0-9_]/", '', $field);
-                    $orderBy .= "$field IS NULL, $field $order,";
+                    if(isset($layout['fields'][$field]) && $layout['fields'][$field]['type'] == Form::_HISTORICAL_DATE)
+                        $orderBy .= "$field IS NULL, $field->\"$.sort\" $order,";
+                    else
+                        $orderBy .= "$field IS NULL, $field $order,";
                 }
             }
             $orderBy = substr($orderBy, 0, -1); //Trim the last comma
@@ -1108,6 +1117,7 @@ class Form extends Model {
             config('database.connections.mysql.database')
         );
         $prefix = config('database.connections.mysql.prefix');
+        $layout = $this->layout;
 
         //We want to make sure we are doing things in utf8 for special characters
         if(!mysqli_set_charset($con, "utf8")) {
@@ -1126,7 +1136,7 @@ class Form extends Model {
         if(!is_array($filters['fields']) && $filters['fields'] == 'ALL') {
             //Builds out order of fields based on page
             $flids = array();
-            foreach($this->layout['pages'] as $page) {
+            foreach($layout['pages'] as $page) {
                 $flids = array_merge($flids, $page['flids']);
             }
         } else {
@@ -1142,11 +1152,11 @@ class Form extends Model {
         //Store the models
         foreach($fields as $f) {
             if(!in_array($f,['kid','legacy_kid','updated_at','owner'])) {
-                $fieldToModel[$f] = $this->getFieldModel($this->layout['fields'][$f]['type']);
+                $fieldToModel[$f] = $this->getFieldModel($layout['fields'][$f]['type']);
                 if($filters['under'])
-                    $fieldToRealName[$f] = str_replace(' ','_',$this->layout['fields'][$f]['name']);
+                    $fieldToRealName[$f] = str_replace(' ','_',$layout['fields'][$f]['name']);
                 else
-                    $fieldToRealName[$f] = $this->layout['fields'][$f]['name'];
+                    $fieldToRealName[$f] = $layout['fields'][$f]['name'];
             }
         }
 
@@ -1171,7 +1181,10 @@ class Form extends Model {
                         $field = fieldMapper($flid,$this->project_id,$this->id);
                     //Used to protect SQL
                     $field = preg_replace("/[^A-Za-z0-9_]/", '', $field);
-                    $orderBy .= "$field IS NULL, $field $order,";
+                    if(isset($layout['fields'][$field]) && $layout['fields'][$field]['type'] == Form::_HISTORICAL_DATE)
+                        $orderBy .= "$field IS NULL, $field->\"$.sort\" $order,";
+                    else
+                        $orderBy .= "$field IS NULL, $field $order,";
                 }
             }
             $orderBy = substr($orderBy, 0, -1); //Trim the last comma
@@ -1222,6 +1235,7 @@ class Form extends Model {
 
         return $results;
     }
+
     public function getRecordsForExportLegacyBeta($filters, $rids = null) {
         $results = [];
         $betaMappings = [];
@@ -1233,6 +1247,7 @@ class Form extends Model {
             config('database.connections.mysql.database')
         );
         $prefix = config('database.connections.mysql.prefix');
+        $layout = $this->layout;
 
         //We want to make sure we are doing things in utf8 for special characters
         if(!mysqli_set_charset($con, "utf8")) {
@@ -1251,7 +1266,7 @@ class Form extends Model {
         if(!is_array($filters['fields']) && $filters['fields'] == 'ALL') {
             //Builds out order of fields based on page
             $flids = array();
-            foreach($this->layout['pages'] as $page) {
+            foreach($layout['pages'] as $page) {
                 $flids = array_merge($flids, $page['flids']);
             }
         } else {
@@ -1282,11 +1297,11 @@ class Form extends Model {
         //Store the models
         foreach($fields as $f) {
             if(!in_array($f,['kid','legacy_kid','updated_at','owner'])) {
-                $fieldToModel[$f] = $this->getFieldModel($this->layout['fields'][$f]['type']);
+                $fieldToModel[$f] = $this->getFieldModel($layout['fields'][$f]['type']);
                 if($filters['under'])
-                    $fieldToRealName[$f] = str_replace(' ','_',$this->layout['fields'][$f]['name']);
+                    $fieldToRealName[$f] = str_replace(' ','_',$layout['fields'][$f]['name']);
                 else
-                    $fieldToRealName[$f] = $this->layout['fields'][$f]['name'];
+                    $fieldToRealName[$f] = $layout['fields'][$f]['name'];
             }
         }
 
@@ -1308,7 +1323,10 @@ class Form extends Model {
                     //Used to protect SQL
                     $field = RestfulBetaController::removeIllegalFieldCharacters($flid);
                     $field = preg_replace("/[^A-Za-z0-9_]/", '', $field);
-                    $orderBy .= "$field IS NULL, $field $order,";
+                    if(isset($layout['fields'][$field]) && $layout['fields'][$field]['type'] == Form::_HISTORICAL_DATE)
+                        $orderBy .= "$field IS NULL, $field->\"$.sort\" $order,";
+                    else
+                        $orderBy .= "$field IS NULL, $field $order,";
                 }
             }
             $orderBy = substr($orderBy, 0, -1); //Trim the last comma
@@ -1388,6 +1406,7 @@ class Form extends Model {
             config('database.connections.mysql.database')
         );
         $prefix = config('database.connections.mysql.prefix');
+        $layout = $this->layout;
 
         //We want to make sure we are doing things in utf8 for special characters
         if(!mysqli_set_charset($con, "utf8")) {
@@ -1407,7 +1426,7 @@ class Form extends Model {
         if(!is_array($filters['fields']) && $filters['fields'] == 'ALL') {
             //Builds out order of fields based on page
             $flids = array();
-            foreach($this->layout['pages'] as $page) {
+            foreach($layout['pages'] as $page) {
                 $flids = array_merge($flids, $page['flids']);
             }
         } else {
@@ -1423,7 +1442,7 @@ class Form extends Model {
         //Store the models
         foreach($fields as $f) {
             if($f!='kid')
-                $fieldToModel[$f] = $this->getFieldModel($this->layout['fields'][$f]['type']);
+                $fieldToModel[$f] = $this->getFieldModel($layout['fields'][$f]['type']);
         }
 
         //Subset of rids?
@@ -1444,7 +1463,10 @@ class Form extends Model {
                     //Used to protect SQL
                     $field = fieldMapper($flid,$this->project_id,$this->id);
                     $field = preg_replace("/[^A-Za-z0-9_]/", '', $field);
-                    $orderBy .= "$field IS NULL, $field $order,";
+                    if(isset($layout['fields'][$field]) && $layout['fields'][$field]['type'] == Form::_HISTORICAL_DATE)
+                        $orderBy .= "$field IS NULL, $field->\"$.sort\" $order,";
+                    else
+                        $orderBy .= "$field IS NULL, $field $order,";
                 }
             }
             $orderBy = substr($orderBy, 0, -1); //Trim the last comma
@@ -1463,7 +1485,7 @@ class Form extends Model {
         $records = $con->query($selectRecords);
         while($row = $records->fetch_assoc()) {
             $kid = $row['kid'];
-            $results .= "<Record kid='$kid'>";
+            $results .= "<Record><kid>".$kid."</kid>";
 
             foreach($row as $index => $value) {
                 if($index != 'kid' && !is_null($value))
@@ -1661,6 +1683,7 @@ class Form extends Model {
 
         return $filters;
     }
+
     public function getBetaDataFilters($count, $fields, $rids=null) {
         //Doing this for pretty much the same reason as keyword search above
         $con = mysqli_connect(
@@ -1793,6 +1816,7 @@ class Form extends Model {
 
         //First we build the selects and unionize them
         foreach($forms as $index => $form) {
+            $layout = $form->layout;
             $pieces = 'kid';
             $orderBy = ' ORDER BY ';
             foreach($sortFields as $sf) {
@@ -1805,18 +1829,24 @@ class Form extends Model {
                         $subField = preg_replace("/[^A-Za-z0-9_]/", '', $subField);
                         $ogFLID = preg_replace("/[^A-Za-z0-9_]/", '', $ogFLID);
                         $pieces .= ", `$ogFLID` as `$subField`";
+                        $histDateTest = $ogFLID;
                     } else {
                         $subField = $key;
+                        $ogFLID = fieldMapper($key,$form->project_id,$form->id);
                         //Used to protect SQL
                         $subField = preg_replace("/[^A-Za-z0-9_]/", '', $subField);
-                        $pieces .= ", `$subField`";
+                        $pieces .= ", `$ogFLID` as `$subField`";
+                        $histDateTest = $subField;
                     }
 
-                    $orderBy .= "`$subField` IS NULL, `$subField` $dir,";
+                    if(isset($layout['fields'][$histDateTest]) && $layout['fields'][$histDateTest]['type'] == Form::_HISTORICAL_DATE)
+                        $orderBy .= "`$subField` IS NULL, `$subField`->\"$.sort\" $dir,";
+                    else
+                        $orderBy .= "`$subField` IS NULL, `$subField` $dir,";
                 }
             }
 
-            $select = "SELECT $pieces from ".$prefix."records_$form->id";
+            $select = "SELECT $pieces from ".$prefix."records_".$form->id;
             $formSelects[] = $select;
         }
 

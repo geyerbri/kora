@@ -487,23 +487,22 @@ Kora.Fields.TypedFieldDisplays.Initialize = function() {
     function initializeRichtext() {
         $('.richtext-field-display-js').each(function() {
             var $fieldDisplay = $(this);
-            var $text = $fieldDisplay.find('.richtext-js');
             var $showMoreButton = $fieldDisplay.find('.show-more-richtext-js');
+            var $text = $fieldDisplay.find('.richtext-js');
 
-            var charLength = $text.html().length;
-            var tooLongLimit = 3000;
+            var richHeight = $text.height() + 10; //10 is height padding
+            var maxHeight = 500;
 
-            if (charLength > tooLongLimit) {
-                // Add show more button
+            // Add show more button
+            if(richHeight == maxHeight)
                 $showMoreButton.addClass('active');
-            }
 
             $showMoreButton.click(function(e) {
                e.preventDefault();
 
                var showing = $showMoreButton.attr('showing');
 
-               if (showing == 'more') {
+               if(showing == 'more') {
                    // Showing all, make small
                    $text.removeClass('more');
                    $showMoreButton.attr('showing', 'less');

@@ -4,10 +4,12 @@ use App\FieldValuePreset;
 use App\Form;
 use App\FormGroup;
 use App\KoraFields\ComboListField;
+use App\KoraFields\ListField;
 use App\Project;
 use App\ProjectGroup;
 use App\Record;
 use App\RecordPreset;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -227,6 +229,13 @@ class ImportController extends Controller {
             $record = simplexml_load_string($record);
 
             foreach($record->children() as $key => $field) {
+                //Special case to handle the reimporting of records that were exported to help find record files
+                if($key=='kid' && Record::isKIDPattern((string)$field)) {
+                    $recRequest['kidForReimportingRecordFiles'] = explode('-', (string)$field)[2];
+
+                    $recRequest['kidConnection'] = (string)$field;
+                }
+
                 //Just in case there are extra/unused tags in the XML
                 if(!array_key_exists($key,$matchup))
                     continue;
@@ -260,8 +269,19 @@ class ImportController extends Controller {
                 $fieldMod = $form->layout['fields'][$flid];
                 $typedField = $form->getFieldModel($fieldMod['type']);
                 $recRequest = $typedField->processImportDataXML($flid,$fieldMod,$field,$recRequest);
+
+                if($recRequest instanceof JsonResponse)
+                    return $recRequest;
             }
         } else if($request->type==self::JSON) {
+            //Special case to handle the reimporting of records that were exported to help find record files and associations
+            if(isset($record['kid']) && Record::isKIDPattern($record['kid'])) {
+                $recRequest['kidForReimportingRecordFiles'] = explode('-', $record['kid'])[2];
+
+                if(!isset($record['kidConnection']))
+                    $recRequest['kidConnection'] = $record['kid'];
+            }
+
             foreach($record as $key => $field) {
                 //Just in case there are extra/unused fields in the JSON
                 if(!array_key_exists($key,$matchup))
@@ -287,6 +307,9 @@ class ImportController extends Controller {
                 $fieldMod = $form->layout['fields'][$flid];
                 $typedField = $form->getFieldModel($fieldMod['type']);
                 $recRequest = $typedField->processImportData($flid,$fieldMod,$field,$recRequest);
+
+                if($recRequest instanceof JsonResponse)
+                    return $recRequest;
             }
         } else if($request->type==self::CSV) {
             foreach($record as $key => $field) {
@@ -323,6 +346,9 @@ class ImportController extends Controller {
                 $fieldMod = $form->layout['fields'][$flid];
                 $typedField = $form->getFieldModel($fieldMod['type']);
                 $recRequest = $typedField->processImportDataCSV($flid,$fieldMod,$field,$recRequest);
+
+                if($recRequest instanceof JsonResponse)
+                    return $recRequest;
             }
         }
 
@@ -600,7 +626,9 @@ class ImportController extends Controller {
                     'one' => ['type' => $field['one']['type'], 'name' => $field['one']['name']],
                     'two' => ['type' => $field['two']['type'], 'name' => $field['two']['name']],
                 ]);
-            } else
+            } else if($fieldMod instanceof ListField)
+                $fieldMod->addDatabaseColumn($form->id, $newFlid, $fieldMod::FIELD_DATABASE_METHOD, $field['options']['Options']);
+            else
                 $fieldMod->addDatabaseColumn($form->id, $newFlid, $fieldMod::FIELD_DATABASE_METHOD);
         }
 
@@ -674,7 +702,9 @@ class ImportController extends Controller {
                     'one' => ['type' => $field['one']['type'], 'name' => $field['one']['name']],
                     'two' => ['type' => $field['two']['type'], 'name' => $field['two']['name']],
                 ]);
-            } else
+            } else if($fieldMod instanceof ListField)
+                $fieldMod->addDatabaseColumn($form->id, $newFlid, $fieldMod::FIELD_DATABASE_METHOD, $field['options']['Options']);
+            else
                 $fieldMod->addDatabaseColumn($form->id, $newFlid, $fieldMod::FIELD_DATABASE_METHOD);
         }
 

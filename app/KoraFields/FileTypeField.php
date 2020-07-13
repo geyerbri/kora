@@ -197,6 +197,10 @@ abstract class FileTypeField extends BaseField {
             if(empty($files))
                 return null;
 
+            //Fixes weird json bug
+            ksort($files);
+            $files = array_values($files);
+
             return json_encode($files);
         } else {
             return null;
@@ -258,9 +262,13 @@ abstract class FileTypeField extends BaseField {
             $parts = explode('/',$pathname);
             $name = end($parts);
 
-            if(!file_exists($currDir . '/' . $pathname))
-                return response()->json(["status" => false, "message" => "json_validation_error",
-                    "record_validation_error" => [$request->kid => "$flid: trouble finding file $name"]], 500);
+            if(!file_exists($currDir . '/' . $pathname)) {
+                if(file_exists($currDir . '/' . $request['kidForReimportingRecordFiles'] . '/' . $pathname))
+                    $currDir .= '/' . $request['kidForReimportingRecordFiles'];
+                else
+                    return response()->json(["status" => false, "message" => "json_validation_error",
+                        "record_validation_error" => [$request->kid => "$flid: trouble finding file $name"]], 500);
+            }
             if(!self::validateRecordFileName($name))
                 return response()->json(["status"=>false,"message"=>"json_validation_error",
                     "record_validation_error"=>[$request->kid => "$flid has file with illegal filename"]],500);
@@ -309,9 +317,13 @@ abstract class FileTypeField extends BaseField {
             $parts = explode('/',$pathname);
             $name = end($parts);
             //move file from imp temp to tmp files
-            if(!file_exists($currDir . '/' . $pathname))
-                return response()->json(["status" => false, "message" => "xml_validation_error",
-                    "record_validation_error" => [$request->kid => "$flid: trouble finding file $name"]], 500);
+            if(!file_exists($currDir . '/' . $pathname)) {
+                if(file_exists($currDir . '/' . $request['kidForReimportingRecordFiles'] . '/' . $pathname))
+                    $currDir .= '/' . $request['kidForReimportingRecordFiles'];
+                else
+                    return response()->json(["status" => false, "message" => "json_validation_error",
+                        "record_validation_error" => [$request->kid => "$flid: trouble finding file $name"]], 500);
+            }
             if(!self::validateRecordFileName($name))
                 return response()->json(["status"=>false,"message"=>"json_validation_error",
                     "record_validation_error"=>[$request->kid => "$flid has file with illegal filename"]],500);
@@ -486,13 +498,13 @@ abstract class FileTypeField extends BaseField {
     /**
      * Performs a keyword search on this field and returns any results.
      *
-     * @param  string $flid - Field ID
+     * @param  array $flids - Field ID
      * @param  string $arg - The keywords
      * @param  Record $recordMod - Model to search through
      * @param  boolean $negative - Get opposite results of the search
      * @return array - The RIDs that match search
      */
-    public function keywordSearchTyped($flid, $arg, $recordMod, $form, $negative = false) {
+    public function keywordSearchTyped($flids, $arg, $recordMod, $form, $negative = false) {
         if($negative)
             $param = 'NOT LIKE';
         else
@@ -502,12 +514,19 @@ abstract class FileTypeField extends BaseField {
             ->select("id");
 
         $arg = strtolower($arg); //Solves the JSON mysql case-insensitive issue
-        if($negative) {
-            $dbQuery->whereRaw("LOWER(`$flid`->\"$[*].name\") $param \"$arg\"");
-            $dbQuery->whereRaw("LOWER(`$flid`->\"$[*].caption\") $param \"$arg\"");
-        } else {
-            $dbQuery->orWhereRaw("LOWER(`$flid`->\"$[*].name\") $param \"$arg\"");
-            $dbQuery->orWhereRaw("LOWER(`$flid`->\"$[*].caption\") $param \"$arg\"");
+
+        foreach($flids as $f) {
+            if($negative) {
+                $dbQuery = $dbQuery->orWhere(function($query) use ($f, $param, $arg) {
+                    $query = $query->whereRaw("LOWER(`$f`->\"$[*].name\") $param \"$arg\"");
+                    $query = $query->whereRaw("LOWER(`$f`->\"$[*].caption\") $param \"$arg\"");
+                });
+            } else {
+                $dbQuery = $dbQuery->orWhere(function($query) use ($f, $param, $arg) {
+                    $query = $query->orWhereRaw("LOWER(`$f`->\"$[*].name\") $param \"$arg\"");
+                    $query = $query->orWhereRaw("LOWER(`$f`->\"$[*].caption\") $param \"$arg\"");
+                });
+            }
         }
 
         return $dbQuery->pluck('id')
@@ -945,7 +964,7 @@ abstract class FileTypeField extends BaseField {
             // If the range starts with an '-' we start from the beginning
             // If not, we forward the file pointer
             // And make sure to get the end byte if spesified
-            if ($range{0} == '-'){
+            if ($range[0] == '-'){
                 // The n-number of the last bytes is requested
                 $c_start = $size - substr($range, 1);
             } else {

@@ -412,47 +412,92 @@ $( document ).ajaxComplete(function(event, xhr, options) {
 $('.export-begin-files-js').click(function(e) {
     e.preventDefault();
     $exportDiv = $(this);
+    $exportDivTitle = $('.export-records-title-js');
+    $exportDescDiv = $('.export-files-desc-js');
+    $ogDesc = $exportDescDiv.text();
 
     $exportDiv.addClass('disabled');
-    $exportDiv.text("Generating zip file...");
+    $exportDivTitle.text("Generating zip file...");
 
-    startURL = $exportDiv.attr('startURL');
-    endURL = $exportDiv.attr('endURL');
+    prepURL = $exportDiv.attr('prepURL');
+    buildURL = $exportDiv.attr('buildURL');
+    downloadURL = $exportDiv.attr('downloadURL');
     token = $exportDiv.attr('token');
 
-    //Ajax call to prep zip
-    $.ajax({
-        url: startURL,
+    formRecordZipAjaxCall(prepURL, buildURL, downloadURL, token, $exportDiv, $exportDivTitle, $exportDescDiv, $ogDesc);
+});
+
+function formRecordZipAjaxCall(prepURL, buildURL, downloadURL, token, $exportDiv, $exportDivTitle, $exportDescDiv, $ogDesc, rids=[]) {
+  $exportDivTitle.text("Determining filesize...");
+  $exportDescDiv.text("Estimating size of the zip file.");
+
+  if(rids.length==0)
+    formData = {'_token': token};
+  else
+    formData = {'_token': token, "rids":rids};
+
+  //Ajax call to prep zip
+  $.ajax({
+    url: prepURL,
+    type: 'POST',
+    data: formData,
+    success: function (data) {
+      console.log(data);
+      $exportDivTitle.text("Generating zip file...");
+      $exportDescDiv.text("The estimated size of the zip file is "+data.file_size+". Please be patient " +
+          "as larger file sizes can take a few minutes to prep for download.");
+
+      //Ajax call to build zip
+      $.ajax({
+        url: buildURL,
         type: 'POST',
         data: {
-            "_token": token
+          "_token": token,
+          "file_name": data.file_name,
+          "file_array": data.file_array,
         },
         success: function (data) {
-            //Change text back
-            $exportDiv.removeClass('disabled');
-            $exportDiv.text("Export Record Files");
-            //Set page to download URL
-            document.location.href = endURL;
-        },
-        error: function (error) {
+          //Change text back
           $exportDiv.removeClass('disabled');
-          $exportDiv.text("Something went wrong :(");
+          $exportDivTitle.text("Export Record Files");
+          $exportDescDiv.text($ogDesc);
 
-            console.log(error.responseJSON.message);
+          window.location.href = downloadURL + '/' + data.file_name;
+        },
+        error: function (error,status,err) {
+          hide_loader();
 
-          if(typeof error.responseJSON == 'undefined') {
-            $exportDiv.text("Error creating zip :(");
-            $('.export-files-desc-js').text("Unable to create the zip. Please contact your administrator for more information. You may still export all form records in the formats of JSON or XML.");
-          } else if(error.responseJSON.message == 'no_record_files') {
-            $exportDiv.text("No record files :(");
-            $('.export-files-desc-js').text("There are no record files in this Form. You may still export all form records in the formats of JSON or XML.");
-          } else if(error.responseJSON.message == 'zip_too_big') {
-            $exportDiv.text("Zip too big :(");
-            $('.export-files-desc-js').text("Zipped file is too big. Please use the php artisan command for exporting record files. You may still export all form records in the formats of JSON or XML.");
+          $exportDiv.removeClass('disabled');
+          $exportDivTitle.text("Error creating zip :(");
+          $exportDescDiv.text("An unknown error occurred during the zip process. Please contact your " +
+              "administrator for more information. \n\nA zip file can still be retrieved via the php artisan command " +
+              "line tool. If you do not have access to this tool, let your administrator know this as well.");
+
+          if(err=="Gateway Time-out") {
+            $exportDivTitle.text("Request timed out :(");
+            $exportDescDiv.text("The browser timed out before the zip file could be generated. \n\nA zip file " +
+                "can still be retrieved via the php artisan command line tool. If you do not have access to this tool, let " +
+                "your administrator know this as well.");
           }
         }
-    });
-});
+      });
+    },
+    error: function (error) {
+      hide_loader();
+
+      $exportDiv.removeClass('disabled');
+      $exportDivTitle.text("Something went wrong :(");
+      $exportDescDiv.text("An unknown error occurred while trying to start the zip process. Please contact " +
+          "your administrator for more information. \n\nA zip file can still be retrieved via the php artisan command " +
+          "line tool. If you do not have access to this tool, let your administrator know this as well.");
+
+      if(error.responseJSON.message == 'no_record_files') {
+        $exportDivTitle.text("No record files :(");
+        $exportDescDiv.text("There are no record files in this form to download.");
+      }
+    }
+  });
+}
 
 function unsetBreadCrumbs () {
   if (window.innerWidth > 900) {

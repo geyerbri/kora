@@ -66,6 +66,7 @@ Route::group(['middleware' => 'web'], function () {
     Route::patch('/admin/updateStatus/{id}', 'AdminController@updateStatus');
     Route::patch('/admin/batch', 'AdminController@batch');
     Route::delete('admin/deleteUser/{id}', 'AdminController@deleteUser');
+    Route::delete('admin/revokeGitlab/{id}', 'AdminController@revokeGitlab');
 
 //token routes
     Route::get('/tokens', 'TokenController@index');
@@ -101,9 +102,10 @@ Route::group(['middleware' => 'web'], function () {
 
 //export routes
     Route::get('/projects/{pid}/forms/{fid}/exportRecords/{type}', 'ExportController@exportRecords');
-    Route::get('/projects/{pid}/forms/{fid}/exportSelectedRecords/{type}', 'ExportController@exportSelectedRecords');
+    Route::post('/projects/{pid}/forms/{fid}/exportSelectedRecords/{type}', 'ExportController@exportSelectedRecords');
     Route::post('/projects/{pid}/forms/{fid}/prepFiles', 'ExportController@prepRecordFiles');
-    Route::get('/projects/{pid}/forms/{fid}/exportFiles', 'ExportController@exportRecordFiles');
+    Route::post('/projects/{pid}/forms/{fid}/buildFiles', 'ExportController@buildFormRecordZip');
+    Route::get('/projects/{pid}/forms/{fid}/exportFiles/{name}', 'ExportController@exportRecordFiles');
     Route::get('/projects/{pid}/forms/{fid}/exportForm', 'ExportController@exportForm');
     Route::get('/projects/{pid}/exportProj', 'ExportController@exportProject');
 

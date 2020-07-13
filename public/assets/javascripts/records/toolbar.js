@@ -32,20 +32,35 @@ Kora.Records.Toolbar = function() {
 
       var $modal = $('.export-mult-records-modal-js');
 
-      var selectedRIDs = [];
+      let rids = window.localStorage.getItem('selectedRecords');
+      let $form = $('.export-multiple-js');
 
-      $('.selected').each(function(){
-        var rid = $(this).find('.delete-record-js').attr('rid');
-        selectedRIDs.push(rid);
-      });
-
-      var _href = $('.export-multiple-js').attr('href');
-      var eq = _href.indexOf('=');
-      eq = eq + 1;
-      _href = _href.substring(0, eq);
-      $('.export-multiple-js').attr('href', _href + selectedRIDs);
+      if(rids) {
+        rids = rids.split(',');
+        $form.append('<input type="hidden" name="rids" value="' + rids + '">');
+      }
 
       Kora.Modal.open($modal);
+    });
+
+    $('.export-mult-begin-files-js').click(function(e) {
+      e.preventDefault();
+      $exportDiv = $(this);
+      $exportDivTitle = $('.export-mult-records-title-js');
+      $exportDescDiv = $('.export-mult-files-desc-js');
+      $ogDesc = $exportDescDiv.text();
+
+      $exportDiv.addClass('disabled');
+      $exportDivTitle.text("Generating zip file...");
+
+      prepURL = $exportDiv.attr('prepURL');
+      buildURL = $exportDiv.attr('buildURL');
+      downloadURL = $exportDiv.attr('downloadURL');
+      token = $exportDiv.attr('token');
+
+      let rids = window.localStorage.getItem('selectedRecords');
+
+      formRecordZipAjaxCall(prepURL, buildURL, downloadURL, token, $exportDiv, $exportDivTitle, $exportDescDiv, $ogDesc, rids);
     });
   }
 

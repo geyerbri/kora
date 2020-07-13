@@ -733,44 +733,19 @@ Kora.Dashboard.Index = function() {
         $('.export-dashboard-begin-files-js').click(function(e) {
             e.preventDefault();
             $exportDiv = $(this);
+            $exportDivTitle = $('.export-records-title-'+activeFid+'-js');
+            $exportDescDiv = $('.export-files-desc-'+activeFid+'-js');
+            $ogDesc = $exportDescDiv.text();
 
             $exportDiv.addClass('disabled');
-            $exportDiv.text("Generating zip file...");
+            $exportDivTitle.text("Generating zip file...");
 
-            startURL = $exportDiv.attr('startURL');
-            endURL = $exportDiv.attr('endURL');
+            prepURL = $exportDiv.attr('prepURL');
+            buildURL = $exportDiv.attr('buildURL');
+            downloadURL = $exportDiv.attr('downloadURL');
             token = $exportDiv.attr('token');
 
-            //Ajax call to prep zip
-            $.ajax({
-                url: startURL,
-                type: 'POST',
-                data: {
-                    "_token": token
-                },
-                success: function (data) {
-                    //Change text back
-                    $exportDiv.removeClass('disabled');
-                    $exportDiv.text("Export Record Files");
-                    //Set page to download URL
-                    document.location.href = endURL;
-                },
-                error: function (error) {
-                    $exportDiv.removeClass('disabled');
-                    $exportDiv.text("Something went wrong :(");
-
-                    if(typeof error.responseJSON == 'undefined') {
-                        $exportDiv.text("Error creating zip :(");
-                        $('.export-files-desc-'+activeFid+'-js').text("Unable to create the zip. Please contact your administrator for more information. You may still export all form records in the formats of JSON or XML.");
-                    } else if(error.responseJSON.message == 'no_record_files') {
-                        $exportDiv.text("No record files :(");
-                        $('.export-files-desc-'+activeFid+'-js').text("There are no record files in this Form. You may still export all form records in the formats of JSON or XML.");
-                    } else if(error.responseJSON.message == 'zip_too_big') {
-                        $exportDiv.text("Zip too big :(");
-                        $('.export-files-desc-'+activeFid+'-js').text("Zipped file is too big. Please use the php artisan command for exporting record files. You may still export all form records in the formats of JSON or XML.");
-                    }
-                }
-            });
+            formRecordZipAjaxCall(prepURL, buildURL, downloadURL, token, $exportDiv, $exportDivTitle, $exportDescDiv, $ogDesc);
         });
     }
 
